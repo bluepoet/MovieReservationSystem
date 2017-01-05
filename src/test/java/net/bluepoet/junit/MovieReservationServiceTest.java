@@ -1,8 +1,12 @@
 package net.bluepoet.junit;
 
-import static org.assertj.core.api.Assertions.*;
+import org.assertj.core.util.Lists;
 import org.junit.Before;
 import org.junit.Test;
+
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Created by bluepoet on 2017. 1. 5..
@@ -11,18 +15,25 @@ public class MovieReservationServiceTest {
     private Movie movie;
     private Showing showing;
     private Customer customer;
+    private List<Rule> rules;
 
     @Before
     public void setUp() throws Exception {
-        movie = new Movie(new Money(10000), new NonDiscountStrategy());
+        movie = new Movie(new Money(10000));
         showing = new Showing();
         showing.setMovie(movie);
         customer = new Customer();
+        rules = createRules();
+    }
+
+    private List<Rule> createRules() {
+        return Lists.emptyList();
     }
 
     @Test
     public void calculateNoDiscountMovieFee() throws Exception {
         // Given
+        movie.setDiscountStrategy(new NonDiscountStrategy(rules));
         int audienceCount = 1;
 
         // When
@@ -35,6 +46,7 @@ public class MovieReservationServiceTest {
     @Test
     public void calculateNoDiscountMovieFee_manyAudience() throws Exception {
         // Given
+        movie.setDiscountStrategy(new NonDiscountStrategy(rules));
         int audienceCount = 5;
 
         // When
@@ -42,6 +54,19 @@ public class MovieReservationServiceTest {
 
         // Then
         assertThat(reservation.getFee()).isEqualTo(50000);
+    }
+
+    @Test
+    public void calculateAmountDiscountMovieFee() throws Exception {
+        // Given
+        movie.setDiscountStrategy(new AmountDiscountStrategy(rules));
+        int audienceCount = 1;
+
+        // When
+        Reservation reservation = showing.reserve(customer, audienceCount);
+
+        // Then
+        assertThat(reservation.getFee()).isEqualTo(7000);
     }
 }
 
@@ -52,9 +77,8 @@ class Movie {
     public Movie() {
     }
 
-    public Movie(Money fee, DiscountStrategy discountStrategy) {
+    public Movie(Money fee) {
         this.fee = fee;
-        this.discountStrategy = discountStrategy;
     }
 
     public void setDiscountStrategy(DiscountStrategy discountStrategy) {
@@ -64,18 +88,82 @@ class Movie {
     public Money calculateFee(Showing showing) {
         return fee.minus(discountStrategy.calculateDiscountFee(showing));
     }
+
+    public Money getFee() {
+        return fee;
+    }
 }
 
 abstract class DiscountStrategy {
+    private List<Rule> rules;
 
-    protected Money calculateDiscountFee(Showing showing) {
-        return null;
+    public DiscountStrategy(List<Rule> rules) {
+        this.rules = rules;
+    }
+
+    public Money calculateDiscountFee(Showing showing) {
+        for (Rule rule : rules) {
+            if (rule.isSatisfiedBy(showing)) {
+                return getDiscountFee(showing);
+            }
+        }
+
+        return Money.ZERO;
+    }
+
+    protected abstract Money getDiscountFee(Showing showing);
+
+    public void setRules(List<Rule> rules) {
+        this.rules = rules;
+    }
+}
+
+interface Rule {
+    boolean isSatisfiedBy(Showing showing);
+}
+
+class SequenceRule implements Rule {
+
+    public boolean isSatisfiedBy(Showing showing) {
+        return false;
+    }
+}
+
+class TimeOfDayRule implements Rule {
+    public boolean isSatisfiedBy(Showing showing) {
+        return false;
     }
 }
 
 class NonDiscountStrategy extends DiscountStrategy {
-    protected Money calculateDiscountFee(Showing showing) {
+    public NonDiscountStrategy(List<Rule> rules) {
+        super(rules);
+    }
+
+    protected Money getDiscountFee(Showing showing) {
         return Money.ZERO;
+    }
+}
+
+class AmountDiscountStrategy extends DiscountStrategy {
+    public AmountDiscountStrategy(List<Rule> rules) {
+        super(rules);
+    }
+
+    protected Money getDiscountFee(Showing showing) {
+        return new Money(3000);
+    }
+}
+
+class PercentDiscountStrategy extends DiscountStrategy {
+    private double percent = 0.2D;
+
+    public PercentDiscountStrategy(List<Rule> rules) {
+        super(rules);
+    }
+
+    protected Money getDiscountFee(Showing showing) {
+        return showing.getFixedFee().times(percent);
     }
 }
 
@@ -92,6 +180,10 @@ class Showing {
 
     public void setMovie(Movie movie) {
         this.movie = movie;
+    }
+
+    public Money getFixedFee() {
+        return movie.getFee();
     }
 }
 
@@ -113,7 +205,7 @@ class Reservation {
         this.fee = showing.calculateFee().times(audienceCount);
     }
 
-    public int getFee() {
+    public double getFee() {
         return fee.getAmount();
     }
 
@@ -121,9 +213,9 @@ class Reservation {
 
 class Money {
     public static Money ZERO = new Money(0);
-    private int amount;
+    private double amount;
 
-    public Money(int amount) {
+    public Money(double amount) {
         this.amount = amount;
     }
 
@@ -131,11 +223,15 @@ class Money {
         return new Money(this.getAmount() * audienceCount);
     }
 
+    public Money times(double percent) {
+        return new Money(this.getAmount() * percent);
+    }
+
     public Money minus(Money money) {
         return new Money(this.getAmount() - money.getAmount());
     }
 
-    public int getAmount() {
+    public double getAmount() {
         return amount;
     }
 }
