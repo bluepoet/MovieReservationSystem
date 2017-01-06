@@ -1,9 +1,13 @@
 package net.bluepoet.junit;
 
+import net.bluepoet.moviereservation.model.*;
 import org.assertj.core.util.Lists;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.time.DayOfWeek;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -12,10 +16,12 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Created by bluepoet on 2017. 1. 5..
  */
 public class MovieReservationServiceTest {
+    public static final int DEFAULT_AUDIENCE_COUNT = 1;
+
     private Movie movie;
     private Showing showing;
     private Customer customer;
-    private List<Rule> rules;
+    private List<Rule> emptyRules = Lists.emptyList();
 
     @Before
     public void setUp() throws Exception {
@@ -23,215 +29,195 @@ public class MovieReservationServiceTest {
         showing = new Showing();
         showing.setMovie(movie);
         customer = new Customer();
-        rules = createRules();
-    }
-
-    private List<Rule> createRules() {
-        return Lists.emptyList();
     }
 
     @Test
-    public void calculateNoDiscountMovieFee() throws Exception {
+    public void calculateNoRulesMovieFee() throws Exception {
         // Given
-        movie.setDiscountStrategy(new NonDiscountStrategy(rules));
-        int audienceCount = 1;
+        movie.setDiscountStrategy(new NonDiscountStrategy(emptyRules));
 
         // When
-        Reservation reservation = showing.reserve(customer, audienceCount);
+        Reservation reservation = showing.reserve(customer, DEFAULT_AUDIENCE_COUNT);
 
         // Then
         assertThat(reservation.getFee()).isEqualTo(10000);
     }
 
     @Test
-    public void calculateNoDiscountMovieFee_manyAudience() throws Exception {
+    public void calculateNonDiscountMovieFee() throws Exception {
         // Given
-        movie.setDiscountStrategy(new NonDiscountStrategy(rules));
+        showing.setSequence(1);
+        showing.createShowingTime(DayOfWeek.MONDAY, "09:01", "11:01");
+        movie.setDiscountStrategy(new NonDiscountStrategy());
+
+        // When
+        Reservation reservation = showing.reserve(customer, DEFAULT_AUDIENCE_COUNT);
+
+        // Then
+        assertThat(reservation.getFee()).isEqualTo(10000);
+    }
+
+    @Test
+    public void calculateAmountDiscountNotMatchSequenceRuleMovieFee() throws Exception {
+        // Given
+        showing.setSequence(2);
+        showing.createShowingTime(DayOfWeek.MONDAY, "09:01", "11:01");
+        movie.setDiscountStrategy(new AmountDiscountStrategy());
+
+        // When
+        Reservation reservation = showing.reserve(customer, DEFAULT_AUDIENCE_COUNT);
+
+        // Then
+        assertThat(reservation.getFee()).isEqualTo(10000);
+    }
+
+    @Test
+    public void calculateAmountDiscountMatchSequenceRuleMovieFee() throws Exception {
+        // Given
+        showing.setSequence(1);
+        showing.createShowingTime(DayOfWeek.MONDAY, "09:01", "11:01");
+        movie.setDiscountStrategy(new AmountDiscountStrategy());
+
+        // When
+        Reservation reservation = showing.reserve(customer, DEFAULT_AUDIENCE_COUNT);
+
+        // Then
+        assertThat(reservation.getFee()).isEqualTo(7000);
+    }
+
+    @Test
+    public void calculateAmountDiscountMatchSequenceRuleMovieFeeByManyAudienceCount() throws Exception {
+        // Given
+        showing.setSequence(1);
+        showing.createShowingTime(DayOfWeek.MONDAY, "09:01", "11:01");
+        movie.setDiscountStrategy(new AmountDiscountStrategy());
         int audienceCount = 5;
 
         // When
         Reservation reservation = showing.reserve(customer, audienceCount);
 
         // Then
-        assertThat(reservation.getFee()).isEqualTo(50000);
+        assertThat(reservation.getFee()).isEqualTo(35000);
     }
 
     @Test
-    public void calculateAmountDiscountMovieFee() throws Exception {
+    public void calculateAmountDiscountNotMatchDayTimeOfDayRuleMovieFee() throws Exception {
         // Given
-        movie.setDiscountStrategy(new AmountDiscountStrategy(rules));
-        int audienceCount = 1;
+        givenAmountDiscountStrategyAndTimeOfRule(DayOfWeek.FRIDAY, "09:00", "11:40");
+
+        // When
+        Reservation reservation = showing.reserve(customer, DEFAULT_AUDIENCE_COUNT);
+
+        // Then
+        assertThat(reservation.getFee()).isEqualTo(10000);
+    }
+
+    @Test
+    public void calculateAmountDiscountNotMatchTimeDayTimeOfDayRuleMovieFee() throws Exception {
+        // Given
+        givenAmountDiscountStrategyAndTimeOfRule(DayOfWeek.SUNDAY, "09:00", "11:40");
+
+        // When
+        Reservation reservation = showing.reserve(customer, DEFAULT_AUDIENCE_COUNT);
+
+        // Then
+        assertThat(reservation.getFee()).isEqualTo(10000);
+    }
+
+    @Test
+    public void calculateAmountDiscountMatchTimeDayTimeOfDayRuleMovieFee() throws Exception {
+        // Given
+        givenAmountDiscountStrategyAndTimeOfRule(DayOfWeek.SUNDAY, "09:01", "11:29");
+
+        // When
+        Reservation reservation = showing.reserve(customer, DEFAULT_AUDIENCE_COUNT);
+
+        // Then
+        assertThat(reservation.getFee()).isEqualTo(7000);
+    }
+
+    @Test
+    public void calculateAmountDiscountMatchTimeDayTimeOfDayRuleMovieFeeByManyAudienceCount() throws Exception {
+        // Given
+        givenAmountDiscountStrategyAndTimeOfRule(DayOfWeek.SUNDAY, "09:01", "11:29");
+        int audienceCount = 5;
 
         // When
         Reservation reservation = showing.reserve(customer, audienceCount);
 
         // Then
-        assertThat(reservation.getFee()).isEqualTo(7000);
+        assertThat(reservation.getFee()).isEqualTo(35000);
+    }
+
+    @Test
+    public void calculatePercentDiscountSequenceRuleMovieFee() throws Exception {
+        // Given
+        showing.setSequence(1);
+        movie.setDiscountStrategy(new PercentDiscountStrategy());
+
+        // When
+        Reservation reservation = showing.reserve(customer, DEFAULT_AUDIENCE_COUNT);
+
+        // Then
+        assertThat(reservation.getFee()).isEqualTo(8000);
+    }
+
+    @Test
+    public void calculatePercentDiscountTimeOfDayRuleMovieFee() throws Exception {
+        // Given
+        showing.setSequence(2);
+        showing.createShowingTime(DayOfWeek.SUNDAY, "09:01", "11:00");
+        movie.setDiscountStrategy(new PercentDiscountStrategy());
+
+        // When
+        Reservation reservation = showing.reserve(customer, DEFAULT_AUDIENCE_COUNT);
+
+        // Then
+        assertThat(reservation.getFee()).isEqualTo(8000);
+    }
+
+    @Test
+    public void calculateOverrapedDiscountSequenceRuleMovieFee() throws Exception {
+        // Given
+        showing.setSequence(1);
+        showing.createShowingTime(DayOfWeek.TUESDAY, "09:01", "11:00");
+        movie.setDiscountStrategy(createOverlappedDiscountStrategy());
+
+        // When
+        Reservation reservation = showing.reserve(customer, DEFAULT_AUDIENCE_COUNT);
+
+        // Then
+        assertThat(reservation.getFee()).isEqualTo(5000);
+    }
+
+    @Test
+    public void calculateOverrapedDiscountTimeOfDayRuleMovieFee() throws Exception {
+        // Given
+        showing.setSequence(2);
+        showing.createShowingTime(DayOfWeek.SUNDAY, "09:01", "11:01");
+        movie.setDiscountStrategy(createOverlappedDiscountStrategy());
+
+        // When
+        Reservation reservation = showing.reserve(customer, DEFAULT_AUDIENCE_COUNT);
+
+        // Then
+        assertThat(reservation.getFee()).isEqualTo(5000);
+    }
+
+    private OverlappedDiscountStrategy createOverlappedDiscountStrategy() {
+        OverlappedDiscountStrategy overlappedDiscountStrategy = new OverlappedDiscountStrategy();
+        overlappedDiscountStrategy.setStrategies(createStrategies());
+        return overlappedDiscountStrategy;
+    }
+
+    private List<DiscountStrategy> createStrategies() {
+        return new ArrayList<>(Arrays.asList(new AmountDiscountStrategy(), new PercentDiscountStrategy()));
+    }
+
+    private void givenAmountDiscountStrategyAndTimeOfRule(DayOfWeek dayOfWeek, String startTime, String endTime) {
+        showing.setSequence(2);
+        showing.createShowingTime(dayOfWeek, startTime, endTime);
+        movie.setDiscountStrategy(new AmountDiscountStrategy());
     }
 }
 
-class Movie {
-    private Money fee;
-    private DiscountStrategy discountStrategy;
-
-    public Movie() {
-    }
-
-    public Movie(Money fee) {
-        this.fee = fee;
-    }
-
-    public void setDiscountStrategy(DiscountStrategy discountStrategy) {
-        this.discountStrategy = discountStrategy;
-    }
-
-    public Money calculateFee(Showing showing) {
-        return fee.minus(discountStrategy.calculateDiscountFee(showing));
-    }
-
-    public Money getFee() {
-        return fee;
-    }
-}
-
-abstract class DiscountStrategy {
-    private List<Rule> rules;
-
-    public DiscountStrategy(List<Rule> rules) {
-        this.rules = rules;
-    }
-
-    public Money calculateDiscountFee(Showing showing) {
-        for (Rule rule : rules) {
-            if (rule.isSatisfiedBy(showing)) {
-                return getDiscountFee(showing);
-            }
-        }
-
-        return Money.ZERO;
-    }
-
-    protected abstract Money getDiscountFee(Showing showing);
-
-    public void setRules(List<Rule> rules) {
-        this.rules = rules;
-    }
-}
-
-interface Rule {
-    boolean isSatisfiedBy(Showing showing);
-}
-
-class SequenceRule implements Rule {
-
-    public boolean isSatisfiedBy(Showing showing) {
-        return false;
-    }
-}
-
-class TimeOfDayRule implements Rule {
-    public boolean isSatisfiedBy(Showing showing) {
-        return false;
-    }
-}
-
-class NonDiscountStrategy extends DiscountStrategy {
-    public NonDiscountStrategy(List<Rule> rules) {
-        super(rules);
-    }
-
-    protected Money getDiscountFee(Showing showing) {
-        return Money.ZERO;
-    }
-}
-
-class AmountDiscountStrategy extends DiscountStrategy {
-    public AmountDiscountStrategy(List<Rule> rules) {
-        super(rules);
-    }
-
-    protected Money getDiscountFee(Showing showing) {
-        return new Money(3000);
-    }
-}
-
-class PercentDiscountStrategy extends DiscountStrategy {
-    private double percent = 0.2D;
-
-    public PercentDiscountStrategy(List<Rule> rules) {
-        super(rules);
-    }
-
-    protected Money getDiscountFee(Showing showing) {
-        return showing.getFixedFee().times(percent);
-    }
-}
-
-class Showing {
-    private Movie movie;
-
-    public Reservation reserve(Customer customer, int audienceCount) {
-        return new Reservation(customer, this, audienceCount);
-    }
-
-    public Money calculateFee() {
-        return movie.calculateFee(this);
-    }
-
-    public void setMovie(Movie movie) {
-        this.movie = movie;
-    }
-
-    public Money getFixedFee() {
-        return movie.getFee();
-    }
-}
-
-class Customer {
-
-}
-
-class Reservation {
-    private Customer customer;
-    private Showing showing;
-    private int audienceCount;
-
-    private Money fee;
-
-    public Reservation(Customer customer, Showing showing, int audienceCount) {
-        this.customer = customer;
-        this.showing = showing;
-        this.audienceCount = audienceCount;
-        this.fee = showing.calculateFee().times(audienceCount);
-    }
-
-    public double getFee() {
-        return fee.getAmount();
-    }
-
-}
-
-class Money {
-    public static Money ZERO = new Money(0);
-    private double amount;
-
-    public Money(double amount) {
-        this.amount = amount;
-    }
-
-    public Money times(int audienceCount) {
-        return new Money(this.getAmount() * audienceCount);
-    }
-
-    public Money times(double percent) {
-        return new Money(this.getAmount() * percent);
-    }
-
-    public Money minus(Money money) {
-        return new Money(this.getAmount() - money.getAmount());
-    }
-
-    public double getAmount() {
-        return amount;
-    }
-}
