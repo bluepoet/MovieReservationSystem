@@ -153,6 +153,7 @@ public class MovieReservationServiceTest {
     public void calculatePercentDiscountSequenceRuleMovieFee() throws Exception {
         // Given
         showing.setSequence(1);
+        showing.createShowingTime(DayOfWeek.SUNDAY, "09:01", "11:00");
         movie.setDiscountStrategy(new PercentDiscountStrategy());
 
         // When
@@ -202,6 +203,21 @@ public class MovieReservationServiceTest {
 
         // Then
         assertThat(reservation.getFee()).isEqualTo(5000);
+    }
+
+    @Test
+    public void calculateOverrapedDiscountTimeOfDayRuleMovieFeeByManyAudienceCount() throws Exception {
+        // Given
+        showing.setSequence(2);
+        showing.createShowingTime(DayOfWeek.SUNDAY, "09:01", "11:01");
+        movie.setDiscountStrategy(createOverlappedDiscountStrategy());
+        int defaultAudienceCount = 4;
+
+        // When
+        Reservation reservation = showing.reserve(customer, defaultAudienceCount);
+
+        // Then
+        assertThat(reservation.getFee()).isEqualTo(20000);
     }
 
     private OverlappedDiscountStrategy createOverlappedDiscountStrategy() {
