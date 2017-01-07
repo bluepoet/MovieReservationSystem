@@ -1,9 +1,7 @@
-group 'net.bluepoet'
-version '1.0-SNAPSHOT'
-
 apply plugin: 'java'
+apply plugin: 'groovy'
 
-sourceCompatibility = 1.5
+sourceCompatibility = 1.8
 
 repositories {
     mavenCentral()
@@ -12,4 +10,5 @@ repositories {
 dependencies {
     testCompile group: 'junit', name: 'junit', version: '4.11'
     testCompile group: 'org.assertj', name: 'assertj-core', version: '3.2.0'
+    testCompile group: 'org.spockframework', name: 'spock-core', version: '1.0-groovy-2.4'
 }

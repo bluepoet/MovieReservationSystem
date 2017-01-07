@@ -21,7 +21,6 @@ public class MovieReservationServiceTest {
     private Movie movie;
     private Showing showing;
     private Customer customer;
-    private List<Rule> emptyRules = Lists.emptyList();
 
     @Before
     public void setUp() throws Exception {
@@ -34,7 +33,7 @@ public class MovieReservationServiceTest {
     @Test
     public void calculateNoRulesMovieFee() throws Exception {
         // Given
-        movie.setDiscountStrategy(new NonDiscountStrategy(emptyRules));
+        movie.setDiscountStrategy(new NonDiscountStrategy(Lists.emptyList()));
 
         // When
         Reservation reservation = showing.reserve(customer, DEFAULT_AUDIENCE_COUNT);
